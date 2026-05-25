@@ -114,16 +114,22 @@ class SolidWorksDialogHandler(QObject, SolidWorksUiCommons):
                                    self._openTutorialDialog)
 
     def _openConfigDialog(self):
-        if not self._config_dialog:
+        # Always recreate dialog from QML file to allow live editing without Cura restart.
+        # Set _qml_live_reload = False in production if caching is preferred.
+        _qml_live_reload = True
+        if _qml_live_reload or not self._config_dialog:
             self._config_dialog, self._config_context, self._config_component = self._createDialog(
                 "SolidWorksConfiguration.qml")
-        self._config_dialog.show()
+        if self._config_dialog:
+            self._config_dialog.show()
 
     def _openTutorialDialog(self):
-        if not self._tutorial_dialog:
+        _qml_live_reload = True
+        if _qml_live_reload or not self._tutorial_dialog:
             self._tutorial_dialog, self._tutorial_context, self._tutorial_component = self._createDialog(
                 "SolidWorksMacroTutorial.qml")
-        self._tutorial_dialog.show()
+        if self._tutorial_dialog:
+            self._tutorial_dialog.show()
 
     @pyqtSlot()
     def openMacroAndIconDirectory(self):

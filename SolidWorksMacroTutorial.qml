@@ -2,7 +2,7 @@
 // CuraSolidWorksPlugin is released under the terms of the AGPLv3 or higher.
 
 import QtQuick 2.7
-import QtQuick.Controls 1.4
+import QtQuick.Controls 2.0
 import QtQuick.Layouts 1.1
 import QtQuick.Window 2.1
 
@@ -12,11 +12,11 @@ import Cura 1.0 as Cura
 UM.Dialog
 {
     id: base
-    width: 1250 * Screen.devicePixelRatio
-    minimumWidth: 1250 * Screen.devicePixelRatio
+    width: Math.round(Screen.width * 0.8)
+    minimumWidth: Math.round(600 * screenScaleFactor)
 
-    height: 650 * Screen.devicePixelRatio
-    minimumHeight: 650 * Screen.devicePixelRatio
+    height: Math.round(Screen.height * 0.8)
+    minimumHeight: Math.round(400 * screenScaleFactor)
 
     title: catalog.i18nc("@title:window", "How to install Cura SolidWorks macro")
 
@@ -35,7 +35,7 @@ UM.Dialog
             const activated = i == currentStepIndex;
             stepModel.get(i).activated = activated;
             animation.source = "macro/tutorial/" + stepModel.get(currentStepIndex).gif_file_name;
-            animationSlider.maximumValue = animation.frameCount;
+            animationSlider.to = animation.frameCount;
             animationSlider.value = animation.currentFrame;
             animation.playing = true;
         }
@@ -43,22 +43,21 @@ UM.Dialog
 
     Row
     {
+        anchors.fill: parent
         spacing: UM.Theme.getSize("default_margin").width
 
         UM.I18nCatalog { id: catalog; name: "SolidWorksPlugin" }
 
+        // Left panel: step list
         Column
         {
             id: stepsColumn
-            anchors.margins: UM.Theme.getSize("default_margin").width
-            width: base.width / 6
-
+            width: Math.round(base.width / 6)
+            height: parent.height
             spacing: UM.Theme.getSize("default_margin").height
 
             Label
             {
-                anchors.margins: UM.Theme.getSize("default_margin").width
-
                 text: catalog.i18nc("@description:label", "Steps:")
                 wrapMode: Text.WordWrap
                 font: UM.Theme.getFont("large")
@@ -106,8 +105,7 @@ UM.Dialog
 
                 Label
                 {
-                    anchors.margins: UM.Theme.getSize("default_margin").width
-
+                    width: stepsColumn.width
                     text: String(model.index + 1) + ". " + catalog.i18nc("@title:label", model.text)
                     wrapMode: Text.WordWrap
                     font.bold: model.activated
@@ -123,19 +121,10 @@ UM.Dialog
                 }
             }
 
-            Path
-            {
-                PathLine {}
-            }
-
             Button
             {
                 id: getMacroAndIconLocationButton
-                anchors.topMargin: UM.Theme.getSize("default_margin").width * 10
-                anchors.leftMargin: UM.Theme.getSize("default_margin").width
-                anchors.rightMargin: UM.Theme.getSize("default_margin").width
-                anchors.bottomMargin: UM.Theme.getSize("default_margin").width
-                width: parent.width
+                width: stepsColumn.width
                 height: UM.Theme.getSize("button").height
                 text: catalog.i18nc("@action:button", "Open the directory\nwith macro and icon")
                 onClicked:
@@ -145,18 +134,17 @@ UM.Dialog
             }
         }
 
-        Column
+        // Right panel: instructions + animated GIF
+        ColumnLayout
         {
             id: infoColumn
-            anchors.margins: UM.Theme.getSize("default_margin").width
             width: base.width - stepsColumn.width - UM.Theme.getSize("default_margin").width * 3
-
+            height: parent.height
             spacing: UM.Theme.getSize("default_margin").height
 
             Label
             {
-                anchors.margins: UM.Theme.getSize("default_margin").width
-
+                Layout.fillWidth: true
                 text: catalog.i18nc("@description:label", "Instructions:")
                 wrapMode: Text.WordWrap
                 font: UM.Theme.getFont("large")
@@ -165,9 +153,7 @@ UM.Dialog
             Label
             {
                 id: tutorialText
-
-                anchors.margins: UM.Theme.getSize("default_margin").width
-
+                Layout.fillWidth: true
                 text: catalog.i18nc("@description:label", stepModel.get(currentStepIndex).description)
                 wrapMode: Text.WordWrap
                 font: UM.Theme.getFont("default")
@@ -176,20 +162,21 @@ UM.Dialog
             AnimatedImage
             {
                 id: animation
-                anchors.margins: UM.Theme.getSize("default_margin").width
-                width: parent.width
-                height: parent.width / 2
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                fillMode: Image.PreserveAspectFit
                 source: "macro/tutorial/" + stepModel.get(currentStepIndex).gif_file_name
 
                 onSourceChanged:
                 {
-                    animationSlider.maximumValue = frameCount;
+                    animationSlider.to = frameCount;
                     animationSlider.value = currentFrame;
                 }
             }
 
-            Row
+            RowLayout
             {
+                Layout.fillWidth: true
                 spacing: UM.Theme.getSize("default_margin").width
 
                 Button
@@ -222,11 +209,10 @@ UM.Dialog
                 Slider
                 {
                     id: animationSlider
-                    anchors.margins: UM.Theme.getSize("default_margin").width
-                    width: animation.width * 2 / 3
+                    Layout.fillWidth: true
                     orientation: Qt.Horizontal
                     stepSize: 1
-                    minimumValue: 0
+                    from: 0
                     value: animation.currentFrame
 
                     property var wasPlaying: true
@@ -259,12 +245,10 @@ UM.Dialog
         }
     }
 
-
     rightButtons: [
         Button
         {
             id: prevStepButton
-            anchors.margins: UM.Theme.getSize("default_margin").width
             text: catalog.i18nc("@action:button", "Previous Step")
             enabled: base.currentStepIndex > 0
             onClicked:
@@ -275,7 +259,6 @@ UM.Dialog
         Button
         {
             id: nextStepButton
-            anchors.margins: UM.Theme.getSize("default_margin").width
             text:
             {
                 if (base.currentStepIndex + 1 == stepModel.count)
@@ -302,7 +285,6 @@ UM.Dialog
         Button
         {
             id: closeButton
-            anchors.margins: UM.Theme.getSize("default_margin").width
             text: catalog.i18nc("@action:button", "Close")
             onClicked:
             {

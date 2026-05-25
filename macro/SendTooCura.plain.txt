@@ -1,0 +1,157 @@
+Dim swApp As ISldWorks
+Dim Part As Object
+
+Sub main()
+  Set swApp = Application.SldWorks
+  Set Part = swApp.ActiveDoc
+
+  If Part Is Nothing Then
+    MsgBox "No active document. Please open a SolidWorks file first.", vbExclamation, "No Document"
+    Exit Sub
+  End If
+
+  Dim filePath As String
+  filePath = Part.GetPathName()
+
+  If Len(filePath) = 0 Then
+    MsgBox "Please save the document before exporting to Cura.", vbExclamation, "Unsaved Document"
+    Exit Sub
+  End If
+
+  Dim curaExe As String
+  curaExe = FindCuraExe()
+
+  If Len(curaExe) = 0 Then
+    MsgBox "Cannot find UltiMaker Cura on this computer." & vbNewLine & _
+           "Please make sure Cura is installed.", vbInformation, "Cura Not Found"
+    Exit Sub
+  End If
+
+  ' Normalize path: replace forward slashes with backslashes
+  filePath = Replace(filePath, "/", "\")
+
+  Dim ws As Object
+  Set ws = CreateObject("WScript.Shell")
+
+  ' Always use --single-instance:
+  '   - If Cura is not running: starts as IPC server and opens the file.
+  '   - If Cura was opened via macro (has IPC socket): sends file to existing window.
+  '   - If Cura was opened manually (no IPC socket): opens a new window once,
+  '     which then becomes the IPC server for all future macro calls.
+  ws.Run """" & curaExe & """ --single-instance """ & filePath & """"
+End Sub
+
+
+' Searches the Windows registry for any installed Cura version.
+' Returns the full path to the Cura executable, or "" if not found.
+' Works with Cura 2.x, 4.x, 5.x.
+Private Function FindCuraExe() As String
+  Dim reg As Object
+  Set reg = GetObject("winmgmts://./root/default:StdRegProv")
+
+  Dim ws As Object
+  Set ws = CreateObject("WScript.Shell")
+
+  Const HKLM = &H80000002
+
+  ' Search in both 32-bit (WOW6432Node) and 64-bit registry hives
+  Dim regPaths(1) As String
+  regPaths(0) = "SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"
+  regPaths(1) = "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"
+
+  Dim p As Integer
+  For p = 0 To 1
+    Dim arrKeys As Variant
+    reg.EnumKey HKLM, regPaths(p), arrKeys
+
+    If Not IsNull(arrKeys) Then
+      ' Sort descending so latest Cura version comes first
+      Dim sorted() As String
+      sorted = SortDescending(arrKeys)
+
+      Dim i As Integer
+      For i = 0 To UBound(sorted)
+        Dim keyName As String
+        keyName = sorted(i)
+
+        ' Case-insensitive: accept any key that contains "cura"
+        If InStr(1, LCase(keyName), "cura") > 0 Then
+          Dim fullKeyPath As String
+          fullKeyPath = "HKEY_LOCAL_MACHINE\" & regPaths(p) & "\" & keyName & "\"
+
+          ' --- Try InstallLocation first ---
+          Dim installDir As String
+          installDir = ReadReg(ws, fullKeyPath & "InstallLocation")
+          If Len(installDir) > 0 Then
+            If Right(installDir, 1) <> "\" Then installDir = installDir & "\"
+            If Dir(installDir & "UltiMaker-Cura.exe") <> "" Then
+              FindCuraExe = installDir & "UltiMaker-Cura.exe"
+              Exit Function
+            End If
+            If Dir(installDir & "Cura.exe") <> "" Then
+              FindCuraExe = installDir & "Cura.exe"
+              Exit Function
+            End If
+          End If
+
+          ' --- Fall back to DisplayIcon ---
+          Dim iconPath As String
+          iconPath = ReadReg(ws, fullKeyPath & "DisplayIcon")
+          If Len(iconPath) > 0 Then
+            ' Strip icon index suffix like ",0" or ",1"
+            Dim commaPos As Long
+            commaPos = InStrRev(iconPath, ",")
+            If commaPos > Len(iconPath) - 4 And commaPos > 0 Then
+              iconPath = Left(iconPath, commaPos - 1)
+            End If
+            ' The icon path should point directly to the .exe
+            If LCase(Right(iconPath, 4)) = ".exe" And Dir(iconPath) <> "" Then
+              FindCuraExe = iconPath
+              Exit Function
+            End If
+          End If
+        End If
+      Next i
+    End If
+  Next p
+
+  FindCuraExe = ""
+End Function
+
+
+' Safely reads a registry string value. Returns "" on any error.
+Private Function ReadReg(ws As Object, regPath As String) As String
+  On Error Resume Next
+  ReadReg = ws.RegRead(regPath)
+  If Err.Number <> 0 Then ReadReg = ""
+  On Error GoTo 0
+End Function
+
+
+' Sorts a Variant array of strings in descending order (latest version first).
+Private Function SortDescending(arr As Variant) As String()
+  Dim n As Integer
+  n = UBound(arr) - LBound(arr) + 1
+
+  Dim result() As String
+  ReDim result(n - 1)
+
+  Dim i As Integer
+  For i = 0 To n - 1
+    result(i) = CStr(arr(LBound(arr) + i))
+  Next i
+
+  Dim j As Integer
+  Dim tmp As String
+  For i = 0 To n - 2
+    For j = i + 1 To n - 1
+      If result(i) < result(j) Then
+        tmp = result(i)
+        result(i) = result(j)
+        result(j) = tmp
+      End If
+    Next j
+  Next i
+
+  SortDescending = result
+End Function

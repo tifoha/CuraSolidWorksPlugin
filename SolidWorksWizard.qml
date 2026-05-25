@@ -53,6 +53,7 @@ UM.Dialog
 
                 currentIndex: updateCurrentIndex()
                 width: 175 * screenScaleFactor
+                textRole: "text"
 
                 function updateCurrentIndex()
                 {
