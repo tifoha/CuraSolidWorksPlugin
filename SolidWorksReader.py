@@ -777,44 +777,16 @@ class SolidWorksReader(CommonCOMReader):
                         # Without this the node still carries the 90° rotation, which
                         # causes a double-rotation when the bounding box is computed.
                         scene_node.setTransformation(Matrix())
-                        vertices = scene_node.getMeshData().getVertices()
-                        if vertices is not None and len(vertices) > 0:
-                            mesh_min_y = float(vertices[:, 1].min())
-                            mesh_max_y = float(vertices[:, 1].max())
-                            Logger.log("d", "STL mesh Y range: min={:.3f}, max={:.3f}, height={:.3f}".format(
-                                mesh_min_y, mesh_max_y, mesh_max_y - mesh_min_y))
                     else:
                         Logger.log("d", "Passing children: {}".format(repr(scene_node.getChildren())))
                         self.nodePostProcessing(options, scene_node.getChildren(), revision=revision)
             elif options["tempType"] == "3mf":
                 for scene_node in scene_nodes:
-                    # Log mesh bounds BEFORE transform reset
-                    mesh_data = scene_node.getMeshData()
-                    if mesh_data:
-                        verts = mesh_data.getVertices()
-                        if verts is not None and len(verts) > 0:
-                            Logger.log("d", "3MF mesh Y range BEFORE reset: min={:.3f}, max={:.3f}".format(
-                                float(verts[:, 1].min()), float(verts[:, 1].max())))
-                    pos = scene_node.getPosition()
-                    Logger.log("d", "3MF node position BEFORE reset: ({:.3f}, {:.3f}, {:.3f})".format(
-                        pos.x, pos.y, pos.z))
-                    local_tf = scene_node.getLocalTransformation()
-                    Logger.log("d", "3MF node local transform data[0:4,3] (translation col): {}".format(
-                        local_tf.getData()[:4, 3].tolist() if hasattr(local_tf.getData(), 'tolist') else str(local_tf)))
-
                     # Reset local transform to identity so position/rotation from 3MF
                     # reader don't interfere. The mesh vertices already encode the shape
                     # in SolidWorks-native Y-up coordinates; Cura's _readMeshFinished
                     # will then place bbox.bottom at Y=0 via its own centering logic.
                     scene_node.setTransformation(Matrix())
-
-                    # Log mesh bounds AFTER reset
-                    mesh_data2 = scene_node.getMeshData()
-                    if mesh_data2:
-                        verts2 = mesh_data2.getVertices()
-                        if verts2 is not None and len(verts2) > 0:
-                            Logger.log("d", "3MF mesh Y range AFTER reset: min={:.3f}, max={:.3f}".format(
-                                float(verts2[:, 1].min()), float(verts2[:, 1].max())))
 
         # ── ZOffsetDecorator fix (3MF only) ────────────────────────────────────
         # Cura's ThreeMFReader computes a ZOffsetDecorator based on the minimum
@@ -832,12 +804,6 @@ class SolidWorksReader(CommonCOMReader):
         if options["tempType"] == "3mf":
             for scene_node in scene_nodes:
                 if scene_node.getDecorator(ZOffsetDecorator):
-                    z_val = scene_node.callDecoration("getZOffset")
-                    Logger.log("d",
-                               "3MF: removing stale ZOffsetDecorator "
-                               "(z_offset={:.3f}) from '{}' — it was computed "
-                               "with the wrong Y↔Z flip and would push the model "
-                               "below the build plate.".format(z_val, scene_node.getName()))
                     scene_node.removeDecorator(ZOffsetDecorator)
 
         return scene_nodes
