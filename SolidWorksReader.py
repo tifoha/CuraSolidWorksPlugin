@@ -922,6 +922,7 @@ class SolidWorksReader(CommonCOMReader):
         existing_nodes = [
             node for node in scene.getRoot().getChildren()
             if node.getMeshData() is not None
+            and node.getMeshData().getFileName()
             and os.path.normpath(node.getMeshData().getFileName()) == norm_path
         ]
 
