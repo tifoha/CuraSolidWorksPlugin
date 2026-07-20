@@ -14,7 +14,7 @@ UM.Dialog
     minimumWidth: width;
     maximumWidth: width;
 
-    height: Math.floor(screenScaleFactor * 215);
+    height: Math.floor(screenScaleFactor * 250);
     minimumHeight: height;
     maximumHeight: height;
 
@@ -29,6 +29,7 @@ UM.Dialog
             showWizardCheckBox.checked = manager.getBoolValue("show_export_settings_always");
             autoRotateCheckBox.checked = manager.getBoolValue("auto_rotate");
             splitAssemblyCheckBox.checked = manager.getBoolValue("split_assembly_into_parts");
+            cleanBuildPlateCheckBox.checked = manager.getBoolValue("clean_build_plate");
         }
     }
 
@@ -42,6 +43,7 @@ UM.Dialog
         property Item showWizard: showWizardCheckBox
         property Item autoRotateCheckBox: autoRotateCheckBox
         property Item splitAssemblyCheckBox: splitAssemblyCheckBox
+        property Item cleanBuildPlateCheckBox: cleanBuildPlateCheckBox
         property Item qualityDropdown: qualityDropdown
         //property Item choiceModel: choiceModel
         property Item installationsDropdown: installationsDropdown
@@ -204,6 +206,16 @@ UM.Dialog
                 checked: manager.getBoolValue("split_assembly_into_parts");
             }
         }
+        Row
+        {
+            width: parent.width
+            CheckBox
+            {
+                id: cleanBuildPlateCheckBox
+                text: catalog.i18nc("@label", "Clean build plate before importing (replace all parts)");
+                checked: manager.getBoolValue("clean_build_plate");
+            }
+        }
     }
 
     rightButtons: [
@@ -218,6 +230,7 @@ UM.Dialog
                 manager.setBoolValue("show_export_settings_always", showWizardCheckBox.checked);
                 manager.setBoolValue("auto_rotate", autoRotateCheckBox.checked);
                 manager.setBoolValue("split_assembly_into_parts", splitAssemblyCheckBox.checked);
+                manager.setBoolValue("clean_build_plate", cleanBuildPlateCheckBox.checked);
                 close();
             }
             enabled: true

@@ -141,6 +141,7 @@ class SolidWorksDialogHandler(QObject, SolidWorksUiCommons):
 
 class SolidWorksReaderWizard(QObject, SolidWorksUiCommons):
     show_config_ui_trigger = pyqtSignal()
+    remove_scene_nodes_trigger = pyqtSignal(object)
 
     def __init__(self, extension):
         super().__init__()
@@ -150,6 +151,7 @@ class SolidWorksReaderWizard(QObject, SolidWorksUiCommons):
         self._cancelled = False
         self._ui_view = None
         self.show_config_ui_trigger.connect(self._onShowConfigUI)
+        self.remove_scene_nodes_trigger.connect(self._onRemoveSceneNodes)
 
         self._ui_lock = threading.Lock()
 
@@ -187,6 +189,13 @@ class SolidWorksReaderWizard(QObject, SolidWorksUiCommons):
             self._ui_view, self._ui_context, self._ui_component = self._createDialog(
                 "SolidWorksWizard.qml", directory=os.path.split(__file__)[0])
         self._ui_view.show()
+
+    @pyqtSlot(object)
+    def _onRemoveSceneNodes(self, nodes):
+        for node in nodes:
+            parent = node.getParent()
+            if parent is not None:
+                parent.removeChild(node)
 
     @pyqtSlot()
     def onOkButtonClicked(self):

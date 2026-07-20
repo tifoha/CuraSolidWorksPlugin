@@ -83,6 +83,7 @@ class SolidWorksExtension(CommonCOMExtension):
         self.preference_storage.addPreference("export_quality", 10)
         self.preference_storage.addPreference("auto_rotate", True)
         self.preference_storage.addPreference("split_assembly_into_parts", False)
+        self.preference_storage.addPreference("clean_build_plate", False)
 
         # UI settings
         self.preference_storage.addPreference("show_export_settings_always", True)
@@ -309,9 +310,18 @@ class SolidWorksReader(CommonCOMReader):
         if self.extension.wizard.getCancelled():
             Logger.log("d", "User cancelled conversion of file!")
             return MeshReader.PreReadResult.cancelled
-        Logger.log("d", "Continuing to convert file..")
 
+        if self.preference_storage.getValue("clean_build_plate"):
+            self._clearBuildPlate()
+
+        Logger.log("d", "Continuing to convert file..")
         return MeshReader.PreReadResult.accepted
+
+    def read(self, file_path):
+        result = super().read(file_path)
+        if result and not self.preference_storage.getValue("clean_build_plate"):
+            result = self._applyUpdateInPlace(file_path, result)
+        return result
 
     def setAppVisible(self, state, options):
         # SolidWorks API: ?
@@ -895,3 +905,37 @@ class SolidWorksReader(CommonCOMReader):
                 return scene_nodes
 
         return None
+
+    def _clearBuildPlate(self):
+        try:
+            Application.getInstance().deleteAll()
+        except Exception:
+            scene = Application.getInstance().getController().getScene()
+            for node in list(scene.getRoot().getChildren()):
+                if node.getMeshData() is not None:
+                    node.getParent().removeChild(node)
+
+    def _applyUpdateInPlace(self, file_path, new_nodes):
+        scene = Application.getInstance().getController().getScene()
+        norm_path = os.path.normpath(file_path)
+
+        existing_nodes = [
+            node for node in scene.getRoot().getChildren()
+            if node.getMeshData() is not None
+            and os.path.normpath(node.getMeshData().getFileName()) == norm_path
+        ]
+
+        if not existing_nodes:
+            return new_nodes
+
+        nodes_to_remove = []
+        for i, new_node in enumerate(new_nodes):
+            if i < len(existing_nodes):
+                old_node = existing_nodes[i]
+                new_node.setTransformation(old_node.getLocalTransformation())
+                nodes_to_remove.append(old_node)
+
+        if nodes_to_remove:
+            self.extension.wizard.remove_scene_nodes_trigger.emit(nodes_to_remove)
+
+        return new_nodes
