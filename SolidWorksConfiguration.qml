@@ -14,7 +14,7 @@ UM.Dialog
     minimumWidth: width;
     maximumWidth: width;
 
-    height: Math.floor(screenScaleFactor * 180);
+    height: Math.floor(screenScaleFactor * 215);
     minimumHeight: height;
     maximumHeight: height;
 
@@ -28,6 +28,7 @@ UM.Dialog
             installationsDropdown.updateCurrentIndex();
             showWizardCheckBox.checked = manager.getBoolValue("show_export_settings_always");
             autoRotateCheckBox.checked = manager.getBoolValue("auto_rotate");
+            splitAssemblyCheckBox.checked = manager.getBoolValue("split_assembly_into_parts");
         }
     }
 
@@ -40,6 +41,7 @@ UM.Dialog
 
         property Item showWizard: showWizardCheckBox
         property Item autoRotateCheckBox: autoRotateCheckBox
+        property Item splitAssemblyCheckBox: splitAssemblyCheckBox
         property Item qualityDropdown: qualityDropdown
         //property Item choiceModel: choiceModel
         property Item installationsDropdown: installationsDropdown
@@ -192,6 +194,16 @@ UM.Dialog
                 checked: manager.getBoolValue("auto_rotate");
             }
         }
+        Row
+        {
+            width: parent.width
+            CheckBox
+            {
+                id: splitAssemblyCheckBox
+                text: catalog.i18nc("@label", "Import assembly as separate parts (for group printing)");
+                checked: manager.getBoolValue("split_assembly_into_parts");
+            }
+        }
     }
 
     rightButtons: [
@@ -205,6 +217,7 @@ UM.Dialog
                 installationsDropdown.saveInstallationCode();
                 manager.setBoolValue("show_export_settings_always", showWizardCheckBox.checked);
                 manager.setBoolValue("auto_rotate", autoRotateCheckBox.checked);
+                manager.setBoolValue("split_assembly_into_parts", splitAssemblyCheckBox.checked);
                 close();
             }
             enabled: true

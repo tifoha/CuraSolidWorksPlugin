@@ -6,8 +6,13 @@ __plugin_id__ = "CuraSolidWorksPlugin"
 # * Adding selection to separately import parts from an assembly
 
 # Build-ins
+import glob
 import math
 import os
+import platform
+import tempfile
+import time
+import uuid
 import winreg
 
 # 3rd-party
@@ -28,8 +33,9 @@ from cura.Scene.ZOffsetDecorator import ZOffsetDecorator  # @UnresolvedImport
 
 # CIU
 from .CadIntegrationUtils.CommonComReader import CommonCOMExtension, CommonCOMReader
+from .CadIntegrationUtils.CommonReader import OptionKeywords
 from .CadIntegrationUtils.ComFactory import ComConnector
-from .CadIntegrationUtils.Extras.SystemUtils import Filesystem
+from .CadIntegrationUtils.Extras.SystemUtils import Filesystem, convertDosPathIntoLongPath
 from .CadIntegrationUtils.Extras.Preferences import PreferencesAdvanced
 from .CadIntegrationUtils.Extras.WindowsUtils import RegistryTools
 
@@ -76,12 +82,10 @@ class SolidWorksExtension(CommonCOMExtension):
         self.preference_storage.addPreference("preferred_installation", -1)
         self.preference_storage.addPreference("export_quality", 10)
         self.preference_storage.addPreference("auto_rotate", True)
+        self.preference_storage.addPreference("split_assembly_into_parts", False)
 
         # UI settings
         self.preference_storage.addPreference("show_export_settings_always", True)
-
-        # False is not implemented now! Therefore always True.
-        self._convert_assembly_into_once = True
 
         self.wizard = SolidWorksReaderWizard(self)
 
@@ -89,6 +93,10 @@ class SolidWorksExtension(CommonCOMExtension):
         # Assigning further SolidWorks specific checks
         self.com_service_checker.doBasicChecks = self.com_service_checker_basic
         self.com_service_checker.doAdvancedChecks = self.com_service_checker_advanced
+
+    @property
+    def _convert_assembly_into_once(self):
+        return not self.preference_storage.getValue("split_assembly_into_parts")
 
     def prepareMenu(self):
         self._old_dialog_handler = SolidWorksDialogHandler(self)
@@ -807,3 +815,83 @@ class SolidWorksReader(CommonCOMReader):
                     scene_node.removeDecorator(ZOffsetDecorator)
 
         return scene_nodes
+
+    def readOnSingleAppLayer(self, options):
+        is_assembly = options["foreignFormat"].upper() == self._extension_assembly
+        if is_assembly and self.preference_storage.getValue("split_assembly_into_parts"):
+            return self._readAssemblyAsParts(options)
+        return super().readOnSingleAppLayer(options)
+
+    def _readAssemblyAsParts(self, options):
+        # swSTLComponentsIntoOneFile=False only produces per-component files for STL exports.
+        formats_to_try = [f for f in options[OptionKeywords.export_formats] if f.lower() == "stl"]
+        if not formats_to_try:
+            Logger.log("e", "STL format not available; cannot split assembly into parts.")
+            return None
+
+        options = self.openForeignFile(options)
+
+        quality_enum = options.get(OptionKeywords.application_export_quality,
+                                   self.preference_storage.getValue("export_quality"))
+
+        for file_format in formats_to_try:
+            options[OptionKeywords.export_format] = file_format
+
+            tmp_dir = tempfile.gettempdir()
+            if platform.system() == "Windows":
+                tmp_dir = convertDosPathIntoLongPath(tmp_dir)
+
+            uid = str(uuid.uuid4())
+            main_file = os.path.join(tmp_dir, "{}.{}".format(uid, file_format.upper()))
+            options[OptionKeywords.export_file] = main_file
+
+            try:
+                self.exportFileAs(options, quality_enum=quality_enum)
+            except Exception:
+                Logger.logException("e", "Assembly-as-parts export failed for format: {}".format(file_format))
+                continue
+
+            # SolidWorks creates {uid}-ComponentName.STL for each component
+            all_found = glob.glob(os.path.join(tmp_dir, "{}*.{}".format(uid, file_format.upper())))
+            part_files = [f for f in all_found
+                          if os.path.normcase(f) != os.path.normcase(main_file)]
+
+            if not part_files:
+                if os.path.isfile(main_file):
+                    Logger.log("w", "Split export produced no per-component files; falling back to merged mesh.")
+                    part_files = [main_file]
+                    all_found = part_files
+                else:
+                    Logger.log("e", "Split assembly export produced no output files.")
+                    continue
+
+            reader = Application.getInstance().getMeshFileHandler().getReaderForFile(part_files[0])
+            if not reader:
+                Logger.log("e", "No mesh reader found for format: {}".format(file_format))
+                continue
+
+            scene_nodes = []
+            for part_file in part_files:
+                try:
+                    node = reader.read(part_file)
+                    if node:
+                        if not isinstance(node, list):
+                            node = [node]
+                        self.nodePostProcessing(options, node)
+                        scene_nodes.extend(node)
+                except Exception:
+                    Logger.logException("e", "Failed to read part file: {}".format(part_file))
+
+            if not options.get(OptionKeywords.export_file_preserve, False):
+                for f in all_found:
+                    for _ in range(3):
+                        try:
+                            os.remove(f)
+                            break
+                        except Exception:
+                            time.sleep(5)
+
+            if scene_nodes:
+                return scene_nodes
+
+        return None
